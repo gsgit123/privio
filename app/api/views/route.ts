@@ -35,8 +35,18 @@ export async function POST(req:Request){
         return new NextResponse('videoId is required', { status: 400 });
     }
 
-    const key=`views:${videoId}`;
-    await redis.incr(key);
+    console.log(user);
+
+    const timestamp = Date.now();
+
+    const userViewCountKey=`views:count:${videoId}`;
+    const lastViewTimestampKey =`views:lastView:${videoId}`;
+
+    const multi =redis.multi();
+    multi.hincrby(userViewCountKey, user.email!, 1);
+    multi.zadd(lastViewTimestampKey, { score: timestamp, member: user.email! })
+    await multi.exec();
+
 
     return NextResponse.json({ success:true,message: 'View count incremented' });
 

@@ -57,8 +57,25 @@ export async function GET(req: Request, { params }: { params: { videoId: string 
 
 
 
-    const key=`views:${videoId}`;
-    const viewCount=await redis.get(key)||0;
+    const userViewCountKey = `views:count:${videoId}`;
+    const lastViewTimestampKey = `views:lastView:${videoId}`;
 
-    return NextResponse.json({videoId,viewCount:Number(viewCount)});
+    const userViewCounts=await redis.hgetall(userViewCountKey);
+
+    const analyticsData=[];
+     if (userViewCounts) {
+        for (const [email, count] of Object.entries(userViewCounts)) {
+            const lastViewScore = await redis.zscore(lastViewTimestampKey, email);
+            
+            analyticsData.push({
+                viewer: email,
+                totalViews: Number(count),
+                lastViewed: lastViewScore ? new Date(lastViewScore).toLocaleString() : 'N/A'
+            });
+        }
+    }
+
+    analyticsData.sort((a, b) => new Date(b.lastViewed).getTime() - new Date(a.lastViewed).getTime());
+
+    return NextResponse.json({analytics:analyticsData});
 }
