@@ -15,6 +15,8 @@ export default function WatchPage() {
 
   const hasLoggedView = useRef(false);
 
+  console.log("wathc page rendered");
+
 
   useEffect(() => {
     const fetchVideoTitle = async () => {

@@ -59,25 +59,13 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data, error: recipientError } = await supabaseAdmin.auth.admin.listUsers();
-
-  if (recipientError) {
-    return new NextResponse('error fetching users', { status: 500 });
-  }
-
-  const recipient=data.users.find(user => user.email === sharedWithEmail);
 
   // 5. Create the share record in the database
   const now=new Date();
   const expirationDate = new Date(now.getTime()+expiresInMinutes*60000);
-  console.log(`old: ${expirationDate}`);
-      console.log(`old min: ${expirationDate.getMinutes()}`);
+  
 
-      console.log("minutes:", expiresInMinutes);
 
-  expirationDate.setMinutes(expirationDate.getMinutes() + expiresInMinutes);
-    console.log(`new: ${expirationDate}`);
-    console.log(`new min: ${expirationDate.getMinutes()}`);
 
 
   const { data: newShare, error: insertError } = await supabaseAdmin
@@ -85,8 +73,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
     .insert({
       video_id: videoId,
       shared_by_user_id: owner.id,
-      shared_with_user_id: recipient.id,
-      shared_with_email:recipient?.email,
+      shared_with_email:sharedWithEmail,
       token_expires_at: expirationDate.toISOString(),
     })
     .select('share_token')

@@ -35,7 +35,9 @@ export async function middleware(req: NextRequest) {
 
   return res;
 }
-
 export const config = {
-  matcher: ["/dashboard/:path*"], // apply middleware only for dashboard routes
+  matcher: [
+    '/dashboard', // Protects the main dashboard page
+    '/dashboard/:path*', // Protects all sub-pages
+  ],
 };
