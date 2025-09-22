@@ -53,6 +53,7 @@ export async function GET(req: NextRequest, context: any) {
 
   // Replace .ts filenames in playlist with signed URLs
   for (const signedUrl of signedUrlsData) {
+    if(!signedUrl.path)continue;
     const fileName = signedUrl.path.split('/').pop();
     if (fileName) {
       playlistText = playlistText.replace(fileName, signedUrl.signedUrl);
