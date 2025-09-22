@@ -17,7 +17,7 @@ export default function LandingPage(){
   }
   return (
     <div className="flex h-screen flex-col items-center justify-center bg-black text-white">
-      <h1 className="text-4xl font-bold">Welcome to My Private Netflix</h1>
+      <h1 className="text-4xl font-bold">Welcome to Privio</h1>
       <button
         onClick={signInWithGoogle}
         className="mt-6 rounded bg-red-600 px-4 py-2 text-lg"
