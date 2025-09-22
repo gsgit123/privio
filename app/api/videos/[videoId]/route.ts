@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse,NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ const supaBaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(req: Request,
+export async function GET(req: NextRequest,
   context: { params: { videoId: string } }) {
     const {videoId} = context.params;
     if (!videoId) {
