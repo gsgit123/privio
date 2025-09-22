@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
+import { NextRequest } from "next/server";
+
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +12,8 @@ const redis = new Redis({
 });
 
 
-export async function GET(req: Request, { params }: { params: { videoId: string } }) {
-    const {videoId}=params;
+export async function GET(req: NextRequest,context:{ params: { videoId: string } }) {
+    const {videoId}=context.params;
 
 
     const authHeader = req.headers.get('Authorization');

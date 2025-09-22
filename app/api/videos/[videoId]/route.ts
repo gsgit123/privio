@@ -12,7 +12,6 @@ const supaBaseAdmin = createClient(
 export async function GET(req: Request,
   context: { params: { videoId: string } }) {
     const {videoId} = context.params;
-    console.log("videoId:", videoId);
     if (!videoId) {
         return new NextResponse('Missing videoId', { status: 400 });
     }

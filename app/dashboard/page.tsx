@@ -91,14 +91,15 @@ export default function Dashboard() {
                   className={`bg-gray-800 rounded-lg overflow-hidden transition-transform duration-300 
                   ${video.status === 'ready' ? 'transform hover:scale-105 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
                 >
-                  <div className="w-full h-40 bg-gray-700 flex items-center justify-center">
+                  <div className="relative w-full h-40 bg-gray-700 flex items-center justify-center">
                     {thumbnailUrl ? (
                       <Image
                         src={thumbnailUrl}
                         alt={video.title}
-                        layout="fill"
-                        objectFit="cover"
+                        fill
+                        className="object-cover"
                       />
+
                     ) : (
                       <span className="text-gray-400">
                         {video.status === 'ready' ? 'No Thumbnail' : 'Processing...'}
