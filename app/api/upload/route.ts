@@ -56,8 +56,11 @@ export async function POST(req: Request) {
         });
         return NextResponse.json({ message: "Upload successful", videoId }, { status: 200 });
 
-    } catch (e: any) {
-        console.log(e);
+    } catch (e: unknown) {
+    if (e instanceof Error) {
+        console.log(e.message);
         return NextResponse.json({ error: e.message }, { status: 500 });
     }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+}
 }

@@ -14,14 +14,14 @@ type AnalyticsData = {
 export default function AnalyticsPage() {
     const params = useParams();
     const videoId = params.videoId as string;
-    
+
     const [analytics, setAnalytics] = useState<AnalyticsData[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!videoId) return;
-        
+
         async function fetchAnalytics() {
             // Get the current user's session to get the access token
             const { data: { session } } = await supabase.auth.getSession();
@@ -46,13 +46,17 @@ export default function AnalyticsPage() {
                 const data = await res.json();
                 setAnalytics(data.analytics);
 
-            } catch (err: any) {
-                setError(err.message);
+            } catch (err: unknown) {
+                if (err instanceof Error) {
+                    setError(err.message);
+                } else {
+                    setError('An unknown error occurred');
+                }
             } finally {
                 setLoading(false);
             }
         }
-        
+
         fetchAnalytics();
     }, [videoId]);
 
