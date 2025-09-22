@@ -52,7 +52,6 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify({ videoId: videoId }),
         }).catch(error => {
-            // Log the error, but don't make the user's request fail
             console.error('Failed to trigger transcoding service:', error);
         });
         return NextResponse.json({ message: "Upload successful", videoId }, { status: 200 });

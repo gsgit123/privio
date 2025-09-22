@@ -4,6 +4,8 @@ import { supabase } from "@/lib/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { type User } from "@supabase/supabase-js";
+import Image from "next/image";
 
 type Video = {
   id: string;
@@ -14,7 +16,7 @@ type Video = {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -91,7 +93,12 @@ export default function Dashboard() {
                 >
                   <div className="w-full h-40 bg-gray-700 flex items-center justify-center">
                     {thumbnailUrl ? (
-                      <img src={thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />
+                      <Image
+                        src={thumbnailUrl}
+                        alt={video.title}
+                        layout="fill"
+                        objectFit="cover"
+                      />
                     ) : (
                       <span className="text-gray-400">
                         {video.status === 'ready' ? 'No Thumbnail' : 'Processing...'}
@@ -113,7 +120,7 @@ export default function Dashboard() {
                     <Link href={`/dashboard/analytics/${video.id}`}
                       className="text-xs text-green-400 hover:underline mt-2 inline-block ml-2"
                       onClick={(e) => e.stopPropagation()}>
-                        Analytics
+                      Analytics
                     </Link>
                   </div>
                 </div>
@@ -140,7 +147,7 @@ export default function Dashboard() {
             {/* --- MODIFICATION END --- */}
           </div>
         ) : (
-          <p>You haven't uploaded any videos yet. Click "Upload New Video" to get started.</p>
+          <p>You haven&apos;t uploaded any videos yet. Click &quot;Upload New Video&quot; to get started.</p>
         )}
       </div>
     </div>

@@ -67,7 +67,7 @@ export default function ManageVideoPage() {
       <h1 className="text-2xl font-bold mb-6">Share Video</h1>
       <div className="space-y-4 bg-gray-800 p-6 rounded-lg">
         <div>
-          <label className="block text-sm font-medium">Share with (recipient's email)</label>
+          <label className="block text-sm font-medium">Share with (recipient&apos;s email)</label>
           <input
             type="email"
             value={email}
