@@ -85,7 +85,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
   }
   
   // 6. Construct and return the final share link
-  const shareLink = `${process.env.BASE_URL}/dashboard/watch/${videoId}?token=${newShare.share_token}`;
+  const shareLink = `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/watch/${videoId}?token=${newShare.share_token}`;
   
   return NextResponse.json({ shareLink });
 }
