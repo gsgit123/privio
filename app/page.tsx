@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation"
 
 export default function LandingPage(){
   const router=useRouter()
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
 
   const signInWithGoogle=async()=>{
     const {data,error}=await supabase.auth.signInWithOAuth({
       provider:"google",
       options:{
-        redirectTo:"http://localhost:3000/dashboard"
+        redirectTo:`${baseUrl}/dashboard`
       },
     });
     if(error)console.log("Error",error)
