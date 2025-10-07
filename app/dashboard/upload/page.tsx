@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/client";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -28,11 +29,18 @@ export default function UploadPage() {
     setLoading(true);
     setStatusMessage("Uploading...");
     setErrorMessage("");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        setErrorMessage("You must be logged in to upload.");
+        setLoading(false);
+        return;
+    }
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("title", title);
     formData.append("description", description);
+    formData .append("userId",user.id );
 
     try {
       const res = await fetch("/api/upload", {
