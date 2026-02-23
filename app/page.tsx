@@ -6,7 +6,7 @@ export default function LandingPage() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
   const signInWithGoogle=async()=>{
-    const {data,error}=await supabase.auth.signInWithOAuth({
+    const {error}=await supabase.auth.signInWithOAuth({
       provider:"google",
       options:{
         redirectTo:`${baseUrl}/dashboard`

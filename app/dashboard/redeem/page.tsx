@@ -27,7 +27,7 @@ export default function RedeemPage() {
       } else {
         throw new Error("Link format is incorrect.");
       }
-    } catch (err) {
+    } catch {
       setError("Invalid or malformed share link. Please check the URL and try again.");
       setLoading(false);
     }

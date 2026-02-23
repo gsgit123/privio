@@ -37,6 +37,7 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
   const [levels, setLevels] = useState<{ height: number }[]>([]);
   const [currentLevel, setCurrentLevel] = useState(-1);
   const [showQuality, setShowQuality] = useState(false);
+  const [scrubberHovered, setScrubberHovered] = useState(false); // ✅ replaces inline style mutation
 
   // ── HLS setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -55,16 +56,12 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => setCurrentLevel(data.level));
       return () => { hls.destroy(); hlsRef.current = null; };
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari native HLS
       video.src = url;
       setIsLoading(false);
     }
   }, [url]);
 
   // ── Video event listeners ──────────────────────────────────────────────────
-  // Callbacks (onPlay etc.) are intentionally NOT in the dep array.
-  // Re-registering on every render causes duplicate event fires.
-  // Wrap them in useCallback at the call site if you need reactivity.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -81,7 +78,7 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
         if (video.buffered.length > 0)
           setBuffered(video.buffered.end(video.buffered.length - 1));
       },
-      volumechange:   () => { setVolume(video.volume); setMuted(video.muted); },
+      volumechange: () => { setVolume(video.volume); setMuted(video.muted); },
     };
 
     Object.entries(handlers).forEach(([e, fn]) => video.addEventListener(e, fn));
@@ -157,7 +154,7 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
   };
 
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const bufferedPct = duration > 0 ? (buffered   / duration) * 100 : 0;
+  const bufferedPct = duration > 0 ? (buffered / duration) * 100 : 0;
 
   return (
     <div
@@ -184,10 +181,7 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
 
       {/* Paused overlay */}
       {!playing && !isLoading && (
-        <div
-          className="absolute inset-0 flex items-center justify-center cursor-pointer"
-          onClick={togglePlay}
-        >
+        <div className="absolute inset-0 flex items-center justify-center cursor-pointer" onClick={togglePlay}>
           <div className="w-20 h-20 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:scale-110 transition-transform duration-200">
             <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
@@ -201,17 +195,16 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
         className="absolute bottom-0 left-0 right-0 transition-opacity duration-300"
         style={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? "auto" : "none" }}
       >
-        {/* gradient scrim */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none" />
 
         <div className="relative px-4 pb-3 pt-10">
-          {/* Scrubber */}
+          {/* ✅ Scrubber — hover state via useState, no inline style mutation */}
           <div
-            className="relative mb-3 cursor-pointer rounded-full overflow-visible"
-            style={{ height: "4px" }}
+            className="relative mb-3 cursor-pointer rounded-full transition-all duration-150"
+            style={{ height: scrubberHovered ? "6px" : "4px" }}
             onClick={handleProgressClick}
-            onMouseEnter={(e) => { e.currentTarget.style.height = "6px"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.height = "4px"; }}
+            onMouseEnter={() => setScrubberHovered(true)}
+            onMouseLeave={() => setScrubberHovered(false)}
           >
             <div className="absolute inset-0 bg-white/20 rounded-full" />
             <div
@@ -223,8 +216,8 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
               style={{ width: `${progressPct}%` }}
             />
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-teal-400 rounded-full shadow-lg"
-              style={{ left: `calc(${progressPct}% - 6px)` }}
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-teal-400 rounded-full shadow-lg transition-opacity duration-150"
+              style={{ left: `calc(${progressPct}% - 6px)`, opacity: scrubberHovered ? 1 : 0 }}
             />
           </div>
 
@@ -281,7 +274,7 @@ export default function HlsPlayer({ url, onPlay, onPause, onEnded }: HlsPlayerPr
 
             <div className="flex-grow" />
 
-            {/* Quality selector — only shown when HLS gives >1 level */}
+            {/* Quality */}
             {levels.length > 1 && (
               <div className="relative">
                 <button

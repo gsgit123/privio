@@ -1,18 +1,5 @@
 "use client";
 
-// UploadPage.tsx
-//
-// HOW THIS FIXES THE VERCEL PROBLEM:
-// 1. Browser calls supabase.storage.upload() DIRECTLY — file never touches Vercel.
-// 2. On success, we call our /api/upload route with just JSON metadata (tiny payload).
-// 3. The API route saves the DB record and pings the transcoder.
-//
-// REQUIRED: Your Supabase `raw_uploads` bucket must allow authenticated inserts.
-// RLS policy example:
-//   CREATE POLICY "Authenticated users can upload"
-//   ON storage.objects FOR INSERT
-//   WITH CHECK (auth.role() = 'authenticated');
-
 import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/client";
 import { v4 as uuidv4 } from "uuid";
@@ -38,14 +25,22 @@ export default function UploadPage() {
     }
     setFile(f);
     setErrorMsg("");
-    if (!title) setTitle(f.name.replace(/\.[^/.]+$/, ""));
+    setTitle((prev) => prev || f.name.replace(/\.[^/.]+$/, ""));
   };
 
+  // ✅ Logic duplicated inside so useCallback has no external deps
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped) handleFile(dropped);
+    if (!dropped) return;
+    if (!dropped.type.startsWith("video/")) {
+      setErrorMsg("Please select a video file.");
+      return;
+    }
+    setFile(dropped);
+    setErrorMsg("");
+    setTitle((prev) => prev || dropped.name.replace(/\.[^/.]+$/, ""));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,15 +56,9 @@ export default function UploadPage() {
     const videoId = uuidv4();
     const filePath = `${videoId}.mp4`;
 
-    // ✅ Upload DIRECTLY to Supabase — bypasses Vercel entirely
     const { error: uploadError } = await supabase.storage
       .from("raw_uploads")
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        // Supabase JS v2 doesn't expose upload progress natively,
-        // so we simulate it while the upload runs.
-      });
+      .upload(filePath, file, { cacheControl: "3600", upsert: false });
 
     if (uploadError) {
       setState("error");
@@ -80,7 +69,6 @@ export default function UploadPage() {
     setProgress(100);
     setState("processing");
 
-    // ✅ Only send tiny JSON to Vercel API — no file, no size limit issues
     const res = await fetch("/api/upload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,7 +88,6 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Background grid */}
       <div className="fixed inset-0 opacity-10 pointer-events-none"
         style={{
           backgroundImage: "linear-gradient(to right, rgba(0,128,128,0.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,128,128,0.3) 1px, transparent 1px)",
@@ -129,25 +116,18 @@ export default function UploadPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Drop zone */}
               <div
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
-                  isDragging
-                    ? "border-teal-400 bg-teal-500/10"
-                    : file
-                    ? "border-teal-600 bg-teal-900/10"
-                    : "border-gray-700 hover:border-teal-700 hover:bg-gray-900/50"
+                  isDragging ? "border-teal-400 bg-teal-500/10"
+                  : file ? "border-teal-600 bg-teal-900/10"
+                  : "border-gray-700 hover:border-teal-700 hover:bg-gray-900/50"
                 }`}
               >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
+                <input ref={fileInputRef} type="file" accept="video/*" className="hidden"
                   onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
                 />
                 {file ? (
@@ -165,32 +145,22 @@ export default function UploadPage() {
                 )}
               </div>
 
-              {/* Title */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Title *</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required
                   className="w-full rounded-lg bg-gray-900 border border-gray-700 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500 transition"
                   placeholder="Enter video title"
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
+                <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
                   className="w-full rounded-lg bg-gray-900 border border-gray-700 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500 transition resize-none"
                   placeholder="Optional description..."
                 />
               </div>
 
-              {/* Progress bar */}
               {(state === "uploading" || state === "processing") && (
                 <div>
                   <div className="flex justify-between text-xs text-gray-400 mb-1">
@@ -198,8 +168,7 @@ export default function UploadPage() {
                     {state === "uploading" && <span>{progress}%</span>}
                   </div>
                   <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 transition-all duration-300 rounded-full"
+                    <div className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 transition-all duration-300 rounded-full"
                       style={{ width: state === "processing" ? "100%" : `${progress}%` }}
                     />
                   </div>
@@ -209,13 +178,11 @@ export default function UploadPage() {
                 </div>
               )}
 
-              {/* Error */}
               {errorMsg && (
                 <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">{errorMsg}</p>
               )}
 
-              <button
-                type="submit"
+              <button type="submit"
                 disabled={!file || !title.trim() || state === "uploading" || state === "processing"}
                 className="w-full rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-3 font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-teal-500/30 transition-all duration-200"
               >
