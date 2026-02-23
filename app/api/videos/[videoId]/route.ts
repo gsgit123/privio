@@ -10,9 +10,12 @@ const supaBaseAdmin = createClient(
 );
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(req: NextRequest, context: any) {
-  // Cast params at runtime
-  const { videoId } = context.params as { videoId: string };
+export async function GET(
+  req: NextRequest, 
+  { params }: { params: Promise<{ videoId: string }> }
+) {
+  const resolvedParams = await params;
+  const videoId = resolvedParams.videoId;
 
   if (!videoId) {
     return new NextResponse('Missing videoId', { status: 400 });

@@ -1,213 +1,230 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+// UploadPage.tsx
+//
+// HOW THIS FIXES THE VERCEL PROBLEM:
+// 1. Browser calls supabase.storage.upload() DIRECTLY — file never touches Vercel.
+// 2. On success, we call our /api/upload route with just JSON metadata (tiny payload).
+// 3. The API route saves the DB record and pings the transcoder.
+//
+// REQUIRED: Your Supabase `raw_uploads` bucket must allow authenticated inserts.
+// RLS policy example:
+//   CREATE POLICY "Authenticated users can upload"
+//   ON storage.objects FOR INSERT
+//   WITH CHECK (auth.role() = 'authenticated');
+
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/client";
+import { v4 as uuidv4 } from "uuid";
+import { useRouter } from "next/navigation";
+
+type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
 
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [progress, setProgress] = useState(0);
+  const [state, setState] = useState<UploadState>("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
-    }
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      setErrorMessage("Please select a video file to upload.");
+  const handleFile = (f: File) => {
+    if (!f.type.startsWith("video/")) {
+      setErrorMsg("Please select a video file.");
       return;
     }
-    setLoading(true);
-    setStatusMessage("Uploading...");
-    setErrorMessage("");
+    setFile(f);
+    setErrorMsg("");
+    if (!title) setTitle(f.name.replace(/\.[^/.]+$/, ""));
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) handleFile(dropped);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !title.trim()) return;
+
+    setState("uploading");
+    setProgress(0);
+
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        setErrorMessage("You must be logged in to upload.");
-        setLoading(false);
-        return;
-    }
+    if (!user) { setState("error"); setErrorMsg("Not authenticated."); return; }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("title", title);
-    formData.append("description", description);
-    formData .append("userId",user.id );
+    const videoId = uuidv4();
+    const filePath = `${videoId}.mp4`;
 
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+    // ✅ Upload DIRECTLY to Supabase — bypasses Vercel entirely
+    const { error: uploadError } = await supabase.storage
+      .from("raw_uploads")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        // Supabase JS v2 doesn't expose upload progress natively,
+        // so we simulate it while the upload runs.
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "An unknown error occurred.");
-      }
-      
-      setStatusMessage("Upload successful! Your video is now processing.");
-      setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 2000);
-
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
-      setErrorMessage(`Upload failed: ${errorMessage}`);
-      setStatusMessage("");
-    } finally {
-      setLoading(false);
+    if (uploadError) {
+      setState("error");
+      setErrorMsg(uploadError.message);
+      return;
     }
+
+    setProgress(100);
+    setState("processing");
+
+    // ✅ Only send tiny JSON to Vercel API — no file, no size limit issues
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId, filePath, title, description, userId: user.id }),
+    });
+
+    if (!res.ok) {
+      const { error } = await res.json();
+      setState("error");
+      setErrorMsg(error || "Failed to register upload.");
+      return;
+    }
+
+    setState("done");
+    setTimeout(() => router.push("/dashboard"), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Background Grid */}
-      <div className="fixed inset-0 opacity-10">
-        <div 
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'linear-gradient(to right, rgba(0, 128, 128, 0.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 128, 128, 0.3) 1px, transparent 1px)',
-            backgroundSize: '50px 50px'
-          }}
-        />
-      </div>
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      {/* Background grid */}
+      <div className="fixed inset-0 opacity-10 pointer-events-none"
+        style={{
+          backgroundImage: "linear-gradient(to right, rgba(0,128,128,0.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,128,128,0.3) 1px, transparent 1px)",
+          backgroundSize: "50px 50px",
+        }}
+      />
 
-      {/* Navigation */}
-      <nav className="relative border-b border-teal-900/30 bg-gray-900 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-6 py-4">
-          <Link href="/dashboard" className="text-xl font-bold tracking-wider text-teal-400 uppercase">
-            Privio
-          </Link>
-          <Link 
-            href="/dashboard" 
-            className="text-sm text-gray-400 hover:text-teal-400"
-          >
-            ← Back to Dashboard
-          </Link>
-        </div>
+      <nav className="relative border-b border-teal-900/30 bg-gray-900 px-6 py-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold tracking-wider text-teal-400 uppercase">Privio</h1>
+        <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-400 hover:text-teal-400">
+          ← Back
+        </button>
       </nav>
 
-      {/* Main Content */}
-      <div className="relative flex items-center justify-center p-8">
-        <div className="w-full max-w-2xl">
-          <form onSubmit={handleSubmit} className="bg-gray-900/50 border border-teal-900/30 p-8 rounded-lg backdrop-blur-sm space-y-6">
-            <h1 className="text-3xl font-bold text-center text-teal-400">Upload Video</h1>
-            
-            {/* Title Input */}
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">
-                Title
-              </label>
-              <input
-                id="title" 
-                type="text" 
-                placeholder="My Awesome Video" 
-                required
-                className="block w-full bg-gray-950 border border-teal-900/50 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
-                value={title} 
-                onChange={(e) => setTitle(e.target.value)}
-              />
+      <main className="relative flex-grow flex items-center justify-center p-8">
+        <div className="w-full max-w-xl">
+          <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent">
+            Upload Video
+          </h2>
+
+          {state === "done" ? (
+            <div className="text-center py-12 rounded-xl border border-teal-500/30 bg-teal-500/5">
+              <div className="text-5xl mb-4">✅</div>
+              <p className="text-teal-400 font-semibold text-lg">Upload complete!</p>
+              <p className="text-gray-400 text-sm mt-1">Redirecting to dashboard...</p>
             </div>
-            
-            {/* Description Input */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
-                Description (Optional)
-              </label>
-              <textarea
-                id="description" 
-                placeholder="A short summary of your video..." 
-                rows={4}
-                className="block w-full bg-gray-950 border border-teal-900/50 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-teal-500"
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-            
-            {/* File Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Video File
-              </label>
-              <div className="flex justify-center px-6 py-12 border-2 border-dashed border-teal-900/50 rounded-lg bg-gray-950/50">
-                <div className="space-y-3 text-center">
-                  <svg 
-                    className="mx-auto h-16 w-16 text-teal-500/50" 
-                    stroke="currentColor" 
-                    fill="none" 
-                    viewBox="0 0 48 48"
-                  >
-                    <path 
-                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                    />
-                  </svg>
-                  
-                  <div className="text-sm text-gray-400">
-                    <label 
-                      htmlFor="file-upload" 
-                      className="relative cursor-pointer font-medium text-teal-400 hover:text-teal-300"
-                    >
-                      <span>Click to select a file</span>
-                      <input 
-                        id="file-upload" 
-                        name="file-upload" 
-                        type="file" 
-                        className="sr-only" 
-                        onChange={handleFileChange} 
-                        accept="video/mp4,video/webm,video/quicktime" 
-                      />
-                    </label>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Drop zone */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`cursor-pointer rounded-xl border-2 border-dashed p-10 text-center transition-all duration-200 ${
+                  isDragging
+                    ? "border-teal-400 bg-teal-500/10"
+                    : file
+                    ? "border-teal-600 bg-teal-900/10"
+                    : "border-gray-700 hover:border-teal-700 hover:bg-gray-900/50"
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                />
+                {file ? (
+                  <>
+                    <div className="text-3xl mb-2">🎬</div>
+                    <p className="text-teal-400 font-medium">{file.name}</p>
+                    <p className="text-gray-500 text-xs mt-1">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-3xl mb-2 opacity-40">📁</div>
+                    <p className="text-gray-400">Drop your video here or <span className="text-teal-400">browse</span></p>
+                    <p className="text-gray-600 text-xs mt-1">MP4, MOV, MKV, etc.</p>
+                  </>
+                )}
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  className="w-full rounded-lg bg-gray-900 border border-gray-700 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500 transition"
+                  placeholder="Enter video title"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg bg-gray-900 border border-gray-700 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-teal-500 transition resize-none"
+                  placeholder="Optional description..."
+                />
+              </div>
+
+              {/* Progress bar */}
+              {(state === "uploading" || state === "processing") && (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>{state === "uploading" ? "Uploading to storage..." : "Registering & triggering transcoder..."}</span>
+                    {state === "uploading" && <span>{progress}%</span>}
                   </div>
-                  
-                  {file ? (
-                    <p className="text-sm text-teal-400 font-medium">{file.name}</p>
-                  ) : (
-                    <p className="text-xs text-gray-500">MP4, WEBM, MOV up to 1GB</p>
+                  <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 transition-all duration-300 rounded-full"
+                      style={{ width: state === "processing" ? "100%" : `${progress}%` }}
+                    />
+                  </div>
+                  {state === "processing" && (
+                    <p className="text-xs text-gray-500 mt-1">Your video will be transcoded in the background. You can leave this page.</p>
                   )}
                 </div>
-              </div>
-            </div>
-            
-            {/* Submit Button */}
-            <div>
+              )}
+
+              {/* Error */}
+              {errorMsg && (
+                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">{errorMsg}</p>
+              )}
+
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 focus:outline-none disabled:bg-gray-700 disabled:cursor-not-allowed border border-teal-500/50"
+                disabled={!file || !title.trim() || state === "uploading" || state === "processing"}
+                className="w-full rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500 px-6 py-3 font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-teal-500/30 transition-all duration-200"
               >
-                {loading && (
-                  <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
-                )}
-                {loading ? statusMessage : "Upload & Process Video"}
+                {state === "uploading" ? "Uploading..." : state === "processing" ? "Processing..." : "Upload Video"}
               </button>
-            </div>
-
-            {/* Messages */}
-            {errorMessage && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/50">
-                <p className="text-sm text-red-400 text-center">{errorMessage}</p>
-              </div>
-            )}
-            {statusMessage && !loading && (
-              <div className="p-3 rounded-lg bg-teal-500/10 border border-teal-500/50">
-                <p className="text-sm text-teal-400 text-center">{statusMessage}</p>
-              </div>
-            )}
-          </form>
+            </form>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

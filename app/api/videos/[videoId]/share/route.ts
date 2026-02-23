@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // This line forces the route to be dynamic, fixing issues with reading params and headers.
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request, context:{params:Promise<{videoId: string}>}) {
-  const { videoId } = await context.params;
+export async function POST(req: NextRequest, {params}:{params:Promise<{videoId: string}>}) {
+  const resolverParams = await params;
+  const videoId=resolverParams.videoId;
   const { sharedWithEmail, expiresInMinutes } = await req.json();
 
   // 1. Get the token from the Authorization header
@@ -45,7 +46,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
     .select('id')
     .eq('id', videoId)
     .eq('uploader', owner.id)
-    .single();
+    .maybeSingle();
 
   console.log('Video fetched:', video);
   
@@ -69,7 +70,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
 
 
   const { data: newShare, error: insertError } = await supabaseAdmin
-    .from('shares')
+    .from('video_shares')
     .insert({
       video_id: videoId,
       shared_by_user_id: owner.id,
@@ -77,7 +78,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
       token_expires_at: expirationDate.toISOString(),
     })
     .select('share_token')
-    .single();
+    .maybeSingle();
     
   if (insertError) {
     console.error('Error creating share:', insertError);
@@ -85,7 +86,7 @@ export async function POST(req: Request, context:{params:Promise<{videoId: strin
   }
   
   // 6. Construct and return the final share link
-  const shareLink = `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/watch/${videoId}?token=${newShare.share_token}`;
+  const shareLink = `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard/watch/${videoId}?token=${newShare?.share_token}`;
   
   return NextResponse.json({ shareLink });
 }
