@@ -9,7 +9,6 @@ const supaBaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function GET(
   req: NextRequest, 
   { params }: { params: Promise<{ videoId: string }> }

@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/client";
 import Link from "next/link";
-import { BarChart3, Eye, Clock, User } from "lucide-react";
+import { Eye, Clock, User } from "lucide-react";
 
 type AnalyticsData = {
     viewer: string;

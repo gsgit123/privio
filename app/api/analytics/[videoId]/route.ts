@@ -9,13 +9,11 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
-// 1. Updated Type for Next.js 15: params must be a Promise
 export async function GET(
-  req: NextRequest, 
-  { params }: { params: Promise<{ videoId: string }> } 
+  req: NextRequest,
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
   try {
-    // 2. Await the params before using them
     const resolvedParams = await params;
     const videoId = resolvedParams.videoId;
 
@@ -26,11 +24,7 @@ export async function GET(
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        },
-      }
+      { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
     );
 
     const { data: { user } } = await supabase.auth.getUser(accessToken);
@@ -48,7 +42,6 @@ export async function GET(
     const userViewCountKey = `views:count:${videoId}`;
     const lastViewTimestampKey = `views:lastView:${videoId}`;
 
-    // 3. Redis call wrapped in the try/catch
     const userViewCounts = await redis.hgetall(userViewCountKey);
 
     const analyticsData: { viewer: string; totalViews: number; lastViewed: string }[] = [];
@@ -70,13 +63,18 @@ export async function GET(
 
     return NextResponse.json({ analytics: analyticsData });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // ✅ unknown instead of any
     console.error("Analytics Error:", error);
-    
-    // Check if it's the ENOTFOUND Redis error
-    if (error.code === 'ENOTFOUND') {
+
+    // Narrow the type before accessing properties
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code: string }).code === "ENOTFOUND"
+    ) {
       return NextResponse.json(
-        { error: "Could not connect to Redis. Check your Upstash URL." }, 
+        { error: "Could not connect to Redis. Check your Upstash URL." },
         { status: 503 }
       );
     }
